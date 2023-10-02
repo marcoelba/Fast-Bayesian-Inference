@@ -1,0 +1,11 @@
+name = "bayesian_inference"
+uuid = "9e0f4f3f-0bb3-4a52-bb86-5794c098a261"
+authors = ["Marco Molinari <marco.molinari@medisin.uio.no>"]
+version = "0.1.0"
+
+[deps]
+Distributions = "31c24e10-a181-5473-b8eb-7969acd0382f"
+Flux = "587475ba-b771-5e3f-ad9e-33799f191a9c"
+LinearAlgebra = "37e2e46d-f89d-539d-b4ee-838fcccc9c8e"
+StatsPlots = "f3b207a7-027a-5e70-b257-86293d7955fd"
+Zygote = "e88e6eb3-aa80-5325-afca-941959d7151f"

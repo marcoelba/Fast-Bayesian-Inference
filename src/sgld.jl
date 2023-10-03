@@ -7,7 +7,9 @@ import Distributions
 import LinearAlgebra as la
 import Random
 import Plots
+import StatsPlots
 import Zygote
+import MCMCDiagnosticTools as mcmc_dt
 
 
 """
@@ -19,7 +21,7 @@ p = 4
 
 # First coefficient is the intercept
 true_beta = [1.5, 1., -1., -1.5]
-sigma_y = 0.5
+sigma_y = 1.
 
 X = zeros(Float64, n, p)
 
@@ -27,11 +29,11 @@ Random.seed!(32143)
 
 X[:, 1] .= 1.
 # Fill 2nd and 3rd column with random Normal samples
-norm_d = Distributions.Normal(0., sigma_y)
-X[:, 2:p] = Random.rand(norm_d, (n, p-1))
+X_dist = Distributions.Normal(0., 1.)
+X[:, 2:p] = Random.rand(X_dist, (n, p-1))
 
 # Get y = X * beta + err ~ N(0, 1)
-y = X * true_beta + 0.5 * Random.rand(Distributions.Normal(), n)
+y = X * true_beta + sigma_y * Random.rand(Distributions.Normal(), n)
 
 
 """
@@ -88,7 +90,7 @@ end
     Features pre-processing
 """
 # Continuous features normalisation (minmax in 0-1)
-function minmax(x)
+function minmax_normalisation(x)
     min_x = minimum(x)
     x_std = @. (x - min_x)
     max_x = maximum(x_std)
@@ -97,13 +99,10 @@ function minmax(x)
     return x_std
 end
 
-Plots.histogram(X[:, 2], bins=10)
-Plots.histogram!(minmax(X[:, 2]), bins=10)
-
 Xstd = copy(X)
-Xstd[:, 2] = minmax(X[:, 2])
-Xstd[:, 3] = minmax(X[:, 3])
-Xstd[:, 4] = minmax(X[:, 4])
+Xstd[:, 2] = minmax_normalisation(X[:, 2])
+Xstd[:, 3] = minmax_normalisation(X[:, 3])
+Xstd[:, 4] = minmax_normalisation(X[:, 4])
 
 println(
     "Loss WRONG BETA: ",
@@ -140,7 +139,7 @@ for iter in range(2, n_iter)
         loss(
             beta_t=params,
             n_batches=1,
-            X=Xstd,
+            X=X,
             y=y
         )
     end
@@ -149,8 +148,8 @@ for iter in range(2, n_iter)
     sgd_grads_update(batch_grads[1], eta=eta_t)
 
     # Update the parameters beta using SGD
-    # beta_hat_t = beta_hat_t - 0.5 * batch_grads[1] + sqrt(eta_t) * rand(random_noise_d, size(beta_hat_t))
-    beta_hat_t = beta_hat_t - batch_grads[1] + sqrt(2. * eta_t) * rand(random_noise_d, size(beta_hat_t))
+    beta_hat_t = beta_hat_t - 0.5 * batch_grads[1] + sqrt(eta_t) * rand(random_noise_d, size(beta_hat_t))
+    # beta_hat_t = beta_hat_t - batch_grads[1] + sqrt(2. * eta_t) * rand(random_noise_d, size(beta_hat_t))
     beta_hat_trace[:, iter] = beta_hat_t
     
 end
@@ -161,3 +160,20 @@ beta_hat_trace
 # Trace plot
 Plots.plot(la.transpose(beta_hat_trace))
 true_beta
+
+# Check convergence
+mcmc_dt.rhat(
+    la.transpose(beta_hat_trace)
+)
+
+subsample = range(200, n_iter, step=10)
+mcmc_dt.rhat(
+    la.transpose(beta_hat_trace[:, subsample])
+)
+StatsPlots.density(beta_hat_trace[2, subsample])
+StatsPlots.density!(beta_hat_trace[2, :])
+
+
+# OLS
+la.inv(la.transpose(X)*X) * la.transpose(X) * y
+la.inv(la.transpose(Xstd)*Xstd) * la.transpose(Xstd) * y

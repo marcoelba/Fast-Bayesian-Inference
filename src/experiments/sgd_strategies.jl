@@ -56,7 +56,7 @@ n_iter = 100
 iter = 1
 theta_trace = zeros(Float64, 2, n_iter)
 
-@withprogress for iter in range(1, n_iter)
+for iter in range(1, n_iter)
     println(iter)
 
     # take gradients
@@ -91,7 +91,7 @@ flux_sgd = RMSProp(0.1)
 
 theta = [-1., 1.]
 
-n_iter = 100
+n_iter = 10
 iter = 1
 theta_trace = zeros(Float64, 2, n_iter)
 
@@ -109,3 +109,12 @@ for iter in range(1, n_iter)
     
 end
 
+Plots.contour(x1, x2, (x1, x2) -> @. 2 * exp(-(x1^2 + x2^2)))
+Plots.scatter!([-1], [1], label="Theta", ms=5)
+
+Plots.scatter!(
+    theta_trace[1:1, :]',
+    theta_trace[2:2, :]',
+    label="Theta",
+    ms=3
+)

@@ -9,6 +9,7 @@ import Random
 import Plots
 import StatsPlots
 import Zygote
+import Flux
 import MCMCDiagnosticTools as mcmc_dt
 
 
@@ -157,23 +158,87 @@ end
 # Check
 beta_hat_trace
 
+beta_hat_trace = la.transpose(beta_hat_trace)
 # Trace plot
-Plots.plot(la.transpose(beta_hat_trace))
+Plots.plot(beta_hat_trace)
 true_beta
 
-# Check convergence
+# Check convergence (needs multiple chains to compute between-chains variation)
 mcmc_dt.rhat(
-    la.transpose(beta_hat_trace)
+    beta_hat_trace[:, 2]
 )
 
-subsample = range(200, n_iter, step=10)
-mcmc_dt.rhat(
-    la.transpose(beta_hat_trace[:, subsample])
-)
-StatsPlots.density(beta_hat_trace[2, subsample])
-StatsPlots.density!(beta_hat_trace[2, :])
+# Check ESS
+mcmc_dt.ess(beta_hat_trace[:, 2])
+
+subsample = range(100, n_iter, step=10)
+mcmc_dt.ess(beta_hat_trace[subsample, 2])
+
+Plots.plot(beta_hat_trace[subsample, :])
+
+
+StatsPlots.density(beta_hat_trace[subsample, 2])
+StatsPlots.density!(beta_hat_trace[:, 2])
 
 
 # OLS
 la.inv(la.transpose(X)*X) * la.transpose(X) * y
-la.inv(la.transpose(Xstd)*Xstd) * la.transpose(Xstd) * y
+
+
+" Run sg-mcmc with RMSprop from Flux "
+optimiser = Flux.Optimise.RMSProp(0.01)
+
+# Chain params
+n_iter = 1000
+
+# beta container
+beta_hat_trace = zeros(Float64, p, n_iter)
+
+# intial value
+beta_hat_trace[:, 1] = [0., 0.1, -0.1, 0.1]
+beta_hat_t = beta_hat_trace[:, 1]
+
+# Training loop
+
+iter = 1
+
+for iter in range(2, n_iter)
+
+    # take gradients
+    batch_loss, batch_grads = Zygote.withgradient(beta_hat_t) do params
+        loss(
+            beta_t=params,
+            n_batches=1,
+            X=X,
+            y=y
+        )
+    end
+
+    # Update the gradients
+    Flux.Optimise.update!(optimiser, beta_hat_t, batch_grads[1])
+    lr_t = optimiser.eta
+
+    # Add the random noise to beta following the sg-mcmc rules
+    beta_hat_t = beta_hat_t + sqrt(lr_t) * rand(random_noise_d, size(beta_hat_t))
+    # beta_hat_t = beta_hat_t - 0.5 * batch_grads[1] + sqrt(lr_t) * rand(random_noise_d, size(beta_hat_t))
+
+    beta_hat_trace[:, iter] = beta_hat_t
+    
+end
+
+
+beta_hat_trace = la.transpose(beta_hat_trace)
+# Trace plot
+Plots.plot(beta_hat_trace)
+true_beta
+
+# Check convergence (needs multiple chains to compute between-chains variation)
+mcmc_dt.rhat(
+    beta_hat_trace[:, 2]
+)
+
+# Check ESS
+mcmc_dt.ess(beta_hat_trace[:, 2])
+
+subsample = range(100, n_iter, step=10)
+mcmc_dt.ess(beta_hat_trace[subsample, 2])
